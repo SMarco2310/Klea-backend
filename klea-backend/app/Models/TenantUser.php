@@ -1,0 +1,21 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Relations\Pivot;
+
+class TenantUser extends Pivot
+{
+    protected $table ='tenant_user';
+    protected $fillable = ['tenant_id','user_id','role'];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function tenant()
+    {
+        return $this->belongsTo(Tenants::class);
+    }
+}
