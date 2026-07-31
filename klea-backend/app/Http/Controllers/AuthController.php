@@ -7,9 +7,13 @@ use App\Http\Requests\RegisterRequest;
 use App\Models\Tenants;
 use App\Models\TenantUser;
 use App\Models\User;
+use Firebase\JWT\JWK;
+use Firebase\JWT\JWT;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -29,23 +33,7 @@ class AuthController extends Controller
                     'password' => Hash::make($request->password),
                 ]);
 
-                $tenantName = $request->tenant_name ?: $request->name . "'s Workspace";
-                $slug = Str::slug($tenantName) . '-' . Str::random(6);
-
-                $tenant = Tenants::create([
-                    'name' => $tenantName,
-                    'slug' => $slug,
-                    'status' => 'active',
-                ]);
-
-                TenantUser::create([
-                    'tenant_id' => $tenant->id,
-                    'user_id' => $user->id,
-                    'role' => 'owner',
-                ]);
-
-                $user->current_tenant_id = $tenant->id;
-                $user->save();
+                $this->createTenantForUser($user, $request->tenant_name);
 
                 return $user;
             });
@@ -133,22 +121,121 @@ class AuthController extends Controller
     }
 
     /**
-     * Stub for future Clerk OAuth integration (Google/GitHub sign-in).
-     *
-     * Intended flow once Clerk is configured:
-     * 1. Frontend authenticates via Clerk (incl. Google/GitHub), obtains a Clerk session token.
-     * 2. Frontend sends that token here.
-     * 3. Backend verifies it against Clerk's JWKS (CLERK_JWKS_URL, CLERK_ISSUER env vars).
-     * 4. Backend finds-or-creates a local User by the verified email, running the same
-     *    tenant-creation flow as register() for brand-new users.
-     * 5. Backend issues its own Sanctum token — Clerk is never involved past this point.
+     * Clerk OAuth login (Google/GitHub/etc. sign-in handled by Clerk on the
+     * frontend). The frontend sends us Clerk's session token; we verify it
+     * ourselves against Clerk's public keys (JWKS) rather than trusting it
+     * blindly, then find-or-create a local User and issue our own Sanctum
+     * token. Clerk is not involved in any request after this one.
      */
-    
     public function loginWithClerk(Request $request)
     {
-        return response()->json([
-            'success' => false,
-            'message' => 'Clerk auth not yet configured. Expected: verify Clerk session JWT against Clerk JWKS, find-or-create local User by email, issue Sanctum token.',
-        ], 501);
+        $request->validate(['session_token' => ['required', 'string']]);
+
+        if (! config('clerk.jwks_url') || ! config('clerk.issuer')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Clerk auth is not configured yet (missing CLERK_JWKS_URL / CLERK_ISSUER).',
+            ], 501);
+        }
+
+        try {
+            $claims = $this->verifyClerkToken($request->session_token);
+
+            $email = $claims['email'] ?? null;
+
+            if (! $email) {
+                throw new \RuntimeException('Clerk token did not include an email claim.');
+            }
+
+            $user = DB::transaction(function () use ($email, $claims) {
+                $user = User::firstOrCreate(
+                    ['email' => $email],
+                    [
+                        // Same-email match above means an existing password-based
+                        // account is reused (merged), not duplicated.
+                        'name' => $claims['name'] ?? explode('@', $email)[0],
+                        'password' => Hash::make(Str::random(40)), // unusable random password; this account only ever logs in via Clerk
+                    ]
+                );
+
+                if ($user->wasRecentlyCreated) {
+                    $this->createTenantForUser($user);
+                }
+
+                return $user;
+            });
+
+            $token = $user->createToken('api')->plainTextToken;
+
+            return response()->json([
+                'data' => [
+                    'user' => $user,
+                    'token' => $token,
+                ],
+                'success' => true,
+                'message' => 'Logged in successfully via Clerk',
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Error logging in via Clerk: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to verify Clerk session',
+                'error' => $e->getMessage(),
+            ], 401);
+        }
+    }
+
+    /**
+     * Fetch (and cache) Clerk's JWKS, then verify the session token's
+     * signature, expiry and issuer against it.
+     */
+    protected function verifyClerkToken(string $sessionToken): array
+    {
+        $jwks = Cache::remember('clerk.jwks', 3600, function () {
+            $response = Http::get(config('clerk.jwks_url'));
+
+            if (! $response->successful()) {
+                throw new \RuntimeException('Failed to fetch Clerk JWKS: ' . $response->body());
+            }
+
+            return $response->json();
+        });
+
+        $keys = JWK::parseKeySet($jwks);
+        $decoded = (array) JWT::decode($sessionToken, $keys);
+
+        if (($decoded['iss'] ?? null) !== config('clerk.issuer')) {
+            throw new \RuntimeException('Clerk token issuer mismatch.');
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * Create a brand-new Tenant for a user and attach them as its owner.
+     * Shared by register() and first-time Clerk sign-ins so both paths give
+     * a new user the exact same "one owned workspace" starting state.
+     */
+    protected function createTenantForUser(User $user, ?string $tenantName = null): Tenants
+    {
+        $tenantName = $tenantName ?: $user->name . "'s Workspace";
+        $slug = Str::slug($tenantName) . '-' . Str::random(6);
+
+        $tenant = Tenants::create([
+            'name' => $tenantName,
+            'slug' => $slug,
+            'status' => 'active',
+        ]);
+
+        TenantUser::create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $user->id,
+            'role' => 'owner',
+        ]);
+
+        $user->current_tenant_id = $tenant->id;
+        $user->save();
+
+        return $tenant;
     }
 }
