@@ -18,6 +18,8 @@ class Plans extends Model
         'currency',
         'duration_days',
         'grace_period_days',
+        'yearly_discount_percent',
+        'position',
         'is_active',
     ];
 
@@ -33,7 +35,11 @@ class Plans extends Model
 
     public function features()
     {
-        return $this->belongsToMany(Features::class,'feature_plan')
+        // Explicit FKs because both model classes are plural (Plans,
+        // Features), which breaks Laravel's default singular-based pivot
+        // column guess (it would otherwise look for plans_id/features_id
+        // instead of plan_id/feature_id).
+        return $this->belongsToMany(Features::class, 'feature_plan', 'plan_id', 'feature_id')
         ->withPivot('limit')
         ->withTimestamps();
     }

@@ -25,6 +25,7 @@ class UpdateFeaturesRequest extends FormRequest
     {
         return [
             'application_id'=>['sometimes','exists:applications,id'],
+            'name'=>['sometimes','string','max:255'],
             'code'=>['sometimes','string','max:255', Rule::unique('features','code')->ignore($this->route('feature'))],
             'description'=>['sometimes','string']
         ];

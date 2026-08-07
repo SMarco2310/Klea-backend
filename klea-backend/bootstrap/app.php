@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -17,9 +19,23 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant.member' => \App\Http\Middleware\EnsureUserBelongsToCurrentTenant::class,
             'api.key' => \App\Http\Middleware\EnsureValidApiKey::class,
         ]);
+
+        // This is an API-only app with no "login" web route. Laravel's
+        // default unauthenticated-redirect calls route('login'), which
+        // doesn't exist here and throws before a 401 can even render.
+        // Returning null keeps Authenticate::unauthenticated() on its
+        // JSON/AuthenticationException path for every request.
+        Authenticate::redirectUsing(fn () => null);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+
+        $exceptions->render(function (AuthenticationException $e, Request $request) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated.',
+            ], 401);
+        });
     })->create();

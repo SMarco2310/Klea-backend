@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\AttachFeatureToPlanRequest;
+use App\Http\Requests\ReorderPlansRequest;
 use App\Http\Requests\StorePlansRequest;
 use App\Http\Requests\UpdatePlansRequest;
 use App\Models\Applications;
 use App\Models\Features;
 use App\Models\Plans;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -22,7 +24,7 @@ class PlansController extends Controller
         try {
             $plans = Plans::whereHas('application', function ($q) use ($request) {
                 $q->where('tenant_id', $request->user()->current_tenant_id);
-            })->paginate(20);
+            })->orderBy('position')->paginate(20);
 
             return response()->json([
                 'data' => $plans,
@@ -158,6 +160,40 @@ class PlansController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete plan',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Persist a new display order for the current tenant's plans within one
+     * application. Only plans the tenant actually owns are ever touched,
+     * regardless of what IDs are submitted.
+     */
+    public function reorder(ReorderPlansRequest $request)
+    {
+        try {
+            $ownedPlanIds = Plans::whereHas('application', function ($q) use ($request) {
+                $q->where('tenant_id', $request->user()->current_tenant_id);
+            })->whereIn('id', $request->plan_ids)->pluck('id');
+
+            DB::transaction(function () use ($request, $ownedPlanIds) {
+                foreach (array_values($request->plan_ids) as $position => $planId) {
+                    if ($ownedPlanIds->contains($planId)) {
+                        Plans::whereKey($planId)->update(['position' => $position]);
+                    }
+                }
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Plans reordered successfully'
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Error reordering plans: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to reorder plans',
                 'error' => $e->getMessage()
             ], 500);
         }

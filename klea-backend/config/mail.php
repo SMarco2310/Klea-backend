@@ -115,4 +115,22 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Markdown Mail Settings
+    |--------------------------------------------------------------------------
+    |
+    | Theme used for Markdown-based MailMessage notifications (e.g. tenant
+    | invitations, payment notifications). "klea" is our branded theme at
+    | resources/views/vendor/mail/html/themes/klea.css.
+    |
+    */
+
+    'markdown' => [
+        'theme' => 'klea',
+        'paths' => [
+            resource_path('views/vendor/mail'),
+        ],
+    ],
+
 ];

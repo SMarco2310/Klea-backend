@@ -29,6 +29,7 @@ class StorePlansRequest extends FormRequest
             'currency'=>['required','string','max:10'],
             'duration_days'=>['required','integer','min:1'],
             'grace_period_days'=>['sometimes','integer','min:0'],
+            'yearly_discount_percent'=>['sometimes','integer','min:0','max:100'],
             'is_active'=>['sometimes','boolean']
         ];
     }

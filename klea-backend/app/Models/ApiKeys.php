@@ -20,6 +20,9 @@ class ApiKeys extends Model
        'last_used_at',
        'revoked_at'
     ];
+    // secret_hash is never useful to a client and shouldn't leak even as a
+    // hash — only the plaintext secret (shown once, at creation) matters.
+    protected $hidden = ['secret_hash'];
 
     // relational functions
 

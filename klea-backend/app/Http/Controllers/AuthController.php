@@ -9,6 +9,7 @@ use App\Models\TenantUser;
 use App\Models\User;
 use Firebase\JWT\JWK;
 use Firebase\JWT\JWT;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +38,8 @@ class AuthController extends Controller
 
                 return $user;
             });
+
+            event(new Registered($user));
 
             $token = $user->createToken('api')->plainTextToken;
 

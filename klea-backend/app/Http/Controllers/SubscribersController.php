@@ -67,7 +67,7 @@ class SubscribersController extends Controller
         $this->authorize('update', $subscriber);
 
         try {
-            $subscriber->update($request->only(['phone_number', 'email']));
+            $subscriber->update($request->safe()->only(['phone_number', 'email']));
 
             return response()->json([
                 'data' => $subscriber,

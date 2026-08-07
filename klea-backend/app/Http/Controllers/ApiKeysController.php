@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreApiKeysRequest;
-use App\Http\Requests\UpdateApiKeysRequest;
 use App\Models\Applications;
 use App\Models\ApiKeys;
 use Illuminate\Http\Request;
@@ -107,32 +106,6 @@ class ApiKeysController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch API key',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Update the specified API key (name/environment only — the secret itself
-     * can never be changed here, only revoked and re-issued via a new key).
-     */
-    public function update(UpdateApiKeysRequest $request, ApiKeys $apiKey)
-    {
-        $this->authorize('update', $apiKey);
-
-        try {
-            $apiKey->update($request->only(['name', 'environment']));
-
-            return response()->json([
-                'data' => $apiKey,
-                'success' => true,
-                'message' => 'API key updated successfully'
-            ], 200);
-        } catch (\Exception $e) {
-            Log::error('Error updating API key: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update API key',
                 'error' => $e->getMessage()
             ], 500);
         }

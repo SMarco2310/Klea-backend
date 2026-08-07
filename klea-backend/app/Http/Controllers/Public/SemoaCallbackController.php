@@ -6,10 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Tenants;
 use App\Models\Transactions;
 use App\Models\WebhookLogs;
+use App\Notifications\PaymentFailedNotification;
+use App\Notifications\PaymentReceivedNotification;
 use App\Services\Payments\PaymentGatewayInterface;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 class SemoaCallbackController extends Controller
 {
@@ -53,8 +56,10 @@ class SemoaCallbackController extends Controller
             // states leave the subscription pending until a later callback resolves it.
             if ($state === 'Paid') {
                 $subscription->update(['status' => 'active']);
+                $this->notifyTenant($tenant, new PaymentReceivedNotification($transaction));
             } elseif (in_array($state, ['Error', 'Canceled'])) {
                 $subscription->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+                $this->notifyTenant($tenant, new PaymentFailedNotification($transaction));
             }
 
             // Every callback attempt is logged, success or failure — this is the audit
@@ -97,6 +102,23 @@ class SemoaCallbackController extends Controller
             'Error', 'Canceled' => 'failed',
             default => 'pending',
         };
+    }
+
+    /**
+     * Emails the tenant's owners/admins about a payment event. A failure here
+     * (bad mail config, etc.) is logged but never allowed to break the callback
+     * response itself — Semoa retries on non-2xx, and the webhook to the
+     * external app already carries the source of truth.
+     */
+    protected function notifyTenant(Tenants $tenant, $notification): void
+    {
+        try {
+            $recipients = $tenant->users()->wherePivotIn('role', ['owner', 'admin'])->get();
+
+            Notification::send($recipients, $notification);
+        } catch (\Exception $e) {
+            Log::error('Error sending tenant payment notification: ' . $e->getMessage());
+        }
     }
 
     /**

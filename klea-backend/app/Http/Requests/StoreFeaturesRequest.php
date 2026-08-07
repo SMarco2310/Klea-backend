@@ -24,6 +24,7 @@ class StoreFeaturesRequest extends FormRequest
     {
         return [
             'application_id'=>['required','exists:applications,id'],
+            'name'=>['required','string','max:255'],
             'code'=>['required','string','max:255','unique:features,code'],
             'description'=>['required','string']
         ];

@@ -12,7 +12,8 @@ class Features extends Model
 
     protected $fillable= [
         'application_id',
-        'code', // a code that the user will define to facilitate the integration in his app 
+        'name',
+        'code', // a code that the user will define to facilitate the integration in his app
         'description',
     ];
 
@@ -25,7 +26,7 @@ class Features extends Model
 
     public function plans()
     {
-        return $this->belongsToMany(Plans::class,'feature_plan')
+        return $this->belongsToMany(Plans::class, 'feature_plan', 'feature_id', 'plan_id')
         ->withPivot('limit')
         ->withTimestamps();
     }
