@@ -47,7 +47,16 @@ class UserController extends Controller
                 $data['password'] = Hash::make($request->password);
             }
 
+            $changingEmail = $request->filled('email') && $request->email !== $user->email;
+            if ($changingEmail) {
+                $data['email_verified_at'] = null;
+            }
+
             $user->update($data);
+
+            if ($changingEmail) {
+                $user->sendEmailVerificationNotification();
+            }
 
             return response()->json([
                 'data' => $user,
