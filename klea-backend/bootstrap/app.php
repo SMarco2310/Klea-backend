@@ -6,6 +6,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -37,5 +38,18 @@ return Application::configure(basePath: dirname(__DIR__))
                 'success' => false,
                 'message' => 'Unauthenticated.',
             ], 401);
+        });
+
+        // Laravel's default ValidationException rendering is {message, errors},
+        // which doesn't match the {success, message, error} envelope every other
+        // API response uses — a trap for integrators who only check `success`.
+        $exceptions->render(function (ValidationException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                    'error' => $e->errors(),
+                ], 422);
+            }
         });
     })->create();
