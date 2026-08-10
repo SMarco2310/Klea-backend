@@ -14,9 +14,15 @@ class TransactionsController extends Controller
     public function index(Request $request)
     {
         try {
-            $transactions = Transactions::whereHas('subscription.subscriber', function ($q) use ($request) {
+            $query = Transactions::whereHas('subscription.subscriber', function ($q) use ($request) {
                 $q->where('tenant_id', $request->user()->current_tenant_id);
-            })->latest()->paginate(20);
+            });
+
+            if ($request->filled('environment')) {
+                $query->where('environment', $request->environment);
+            }
+
+            $transactions = $query->latest()->paginate(20);
 
             return response()->json([
                 'data' => $transactions,
@@ -76,6 +82,10 @@ class TransactionsController extends Controller
 
             if ($request->filled('to')) {
                 $query->whereDate('created_at', '<=', $request->to);
+            }
+
+            if ($request->filled('environment')) {
+                $query->where('environment', $request->environment);
             }
 
             return response()->json([

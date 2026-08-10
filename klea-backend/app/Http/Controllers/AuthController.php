@@ -34,8 +34,6 @@ class AuthController extends Controller
                     'password' => Hash::make($request->password),
                 ]);
 
-                $this->createTenantForUser($user, $request->tenant_name);
-
                 return $user;
             });
 
@@ -161,10 +159,6 @@ class AuthController extends Controller
                     ]
                 );
 
-                if ($user->wasRecentlyCreated) {
-                    $this->createTenantForUser($user);
-                }
-
                 return $user;
             });
 
@@ -212,33 +206,5 @@ class AuthController extends Controller
         }
 
         return $decoded;
-    }
-
-    /**
-     * Create a brand-new Tenant for a user and attach them as its owner.
-     * Shared by register() and first-time Clerk sign-ins so both paths give
-     * a new user the exact same "one owned workspace" starting state.
-     */
-    protected function createTenantForUser(User $user, ?string $tenantName = null): Tenants
-    {
-        $tenantName = $tenantName ?: $user->name . "'s Workspace";
-        $slug = Str::slug($tenantName) . '-' . Str::random(6);
-
-        $tenant = Tenants::create([
-            'name' => $tenantName,
-            'slug' => $slug,
-            'status' => 'active',
-        ]);
-
-        TenantUser::create([
-            'tenant_id' => $tenant->id,
-            'user_id' => $user->id,
-            'role' => 'owner',
-        ]);
-
-        $user->current_tenant_id = $tenant->id;
-        $user->save();
-
-        return $tenant;
     }
 }

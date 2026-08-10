@@ -43,7 +43,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/email/verification-notification', [EmailVerificationController::class, 'resend']);
 
-    Route::apiResource('tenants', TenantsController::class)->except(['store']);
+    Route::apiResource('tenants', TenantsController::class);
 
     Route::post('/tenant-invitations/{token}/accept', [TenantInvitationsController::class, 'accept']);
     Route::post('/tenant-invitations/{token}/decline', [TenantInvitationsController::class, 'decline']);

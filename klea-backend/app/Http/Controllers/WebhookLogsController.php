@@ -14,9 +14,17 @@ class WebhookLogsController extends Controller
     public function index(Request $request)
     {
         try {
-            $logs = WebhookLogs::whereHas('transaction.subscription.subscriber', function ($q) use ($request) {
+            $query = WebhookLogs::whereHas('transaction.subscription.subscriber', function ($q) use ($request) {
                 $q->where('tenant_id', $request->user()->current_tenant_id);
-            })->latest()->paginate(20);
+            });
+
+            if ($request->filled('app_id')) {
+                $query->whereHas('transaction.subscription.plan', function ($q) use ($request) {
+                    $q->where('application_id', $request->app_id);
+                });
+            }
+
+            $logs = $query->latest()->paginate(20);
 
             return response()->json([
                 'data' => $logs,

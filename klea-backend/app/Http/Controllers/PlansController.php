@@ -24,7 +24,7 @@ class PlansController extends Controller
         try {
             $plans = Plans::whereHas('application', function ($q) use ($request) {
                 $q->where('tenant_id', $request->user()->current_tenant_id);
-            })->orderBy('position')->paginate(20);
+            })->with('features')->orderBy('position')->paginate(20);
 
             return response()->json([
                 'data' => $plans,
@@ -115,7 +115,7 @@ class PlansController extends Controller
             $plan->update($request->validated());
 
             return response()->json([
-                'data' => $plan,
+                'data' => $plan->load('features'),
                 'success' => true,
                 'message' => 'Plan updated successfully'
             ], 200);

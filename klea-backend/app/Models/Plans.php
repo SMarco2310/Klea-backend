@@ -11,7 +11,7 @@ class Plans extends Model
     /** @use HasFactory<\Database\Factories\PlansFactory> */
     use HasFactory, SoftDeletes;
 
-    protected $fillable= [
+    protected $fillable = [
         'application_id',
         'name',
         'price',
@@ -21,6 +21,15 @@ class Plans extends Model
         'yearly_discount_percent',
         'position',
         'is_active',
+    ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+        'price' => 'float',
+        'duration_days' => 'integer',
+        'grace_period_days' => 'integer',
+        'yearly_discount_percent' => 'integer',
+        'position' => 'integer',
     ];
 
     // Relational Functions

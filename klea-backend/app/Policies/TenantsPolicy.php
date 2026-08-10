@@ -38,6 +38,9 @@ class TenantsPolicy
 
     public function delete(User $user, Tenants $tenants): bool
     {
-        return $this->belongsToTenant($user, $tenants);
+        return $user->tenants()
+            ->where('tenants.id', $tenants->id)
+            ->wherePivot('role', 'owner')
+            ->exists();
     }
 }

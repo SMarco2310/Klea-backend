@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateTenantsRequest;
 use App\Models\Tenants;
+use App\Models\TenantUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -27,6 +28,51 @@ class TenantsController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch tenants',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Store a newly created tenant in storage.
+     */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'slug' => 'required|string|max:255|unique:tenants,slug'
+        ]);
+
+        try {
+            $user = $request->user();
+
+            $tenant = TenantUser::query()->where('user_id', $user->id)->first();
+            
+            $tenant = Tenants::create([
+                'name' => $validated['name'],
+                'slug' => $validated['slug'],
+                'status' => 'active',
+            ]);
+
+            TenantUser::create([
+                'tenant_id' => $tenant->id,
+                'user_id' => $user->id,
+                'role' => 'owner',
+            ]);
+
+            $user->current_tenant_id = $tenant->id;
+            $user->save();
+
+            return response()->json([
+                'data' => $tenant,
+                'success' => true,
+                'message' => 'Workspace created successfully'
+            ], 201);
+        } catch (\Exception $e) {
+            Log::error('Error creating tenant: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create workspace',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -88,11 +134,14 @@ class TenantsController extends Controller
         $this->authorize('delete', $tenant);
 
         try {
+            // Reset current_tenant_id for users currently using this tenant
+            \App\Models\User::where('current_tenant_id', $tenant->id)->update(['current_tenant_id' => null]);
+
             $tenant->delete();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Tenant deleted successfully'
+                'message' => 'Workspace deleted successfully'
             ], 200);
         } catch (\Exception $e) {
             Log::error('Error deleting tenant: ' . $e->getMessage());
