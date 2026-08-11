@@ -25,7 +25,7 @@ class UpdateApplicationsRequest extends FormRequest
     {
         return [
             'name'=>['sometimes','string','max:255'],
-            'slug'=>['sometimes','string','max:255', Rule::unique('applications','slug')->ignore($this->route('application'))],
+            'slug'=>['sometimes','string','max:255', Rule::unique('applications','slug')->where('tenant_id', $this->user()->current_tenant_id)->ignore($this->route('application'))],
             'status'=>['sometimes','in:active,inactive'],
             'webhook_url'=>['sometimes','nullable','url'],
             'webhook_secret'=>['sometimes','nullable','string']

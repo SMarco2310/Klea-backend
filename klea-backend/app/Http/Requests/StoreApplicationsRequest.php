@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreApplicationsRequest extends FormRequest
 {
@@ -24,7 +25,7 @@ class StoreApplicationsRequest extends FormRequest
     {
         return [
             'name'=>['required','string','max:255'],
-            'slug'=>['required','string','max:255','unique:applications,slug'],
+            'slug'=>['required','string','max:255', Rule::unique('applications','slug')->where('tenant_id', $this->user()->current_tenant_id)],
             'status'=>['sometimes','in:active,inactive'],
             'webhook_url'=>['sometimes','nullable','url'],
             'webhook_secret'=>['sometimes','nullable','string']

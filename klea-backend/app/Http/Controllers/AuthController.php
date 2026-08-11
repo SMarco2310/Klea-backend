@@ -142,19 +142,23 @@ class AuthController extends Controller
         try {
             $claims = $this->verifyClerkToken($request->session_token);
 
-            $email = $claims['email'] ?? null;
+            $clerkUser = $this->fetchClerkUser($claims['sub'] ?? '');
+
+            $email = $clerkUser['email'] ?? null;
 
             if (! $email) {
-                throw new \RuntimeException('Clerk token did not include an email claim.');
+                throw new \RuntimeException('Clerk user has no primary email address.');
             }
 
-            $user = DB::transaction(function () use ($email, $claims) {
+            $name = $clerkUser['name'] ?? explode('@', $email)[0];
+
+            $user = DB::transaction(function () use ($email, $name) {
                 $user = User::firstOrCreate(
                     ['email' => $email],
                     [
                         // Same-email match above means an existing password-based
                         // account is reused (merged), not duplicated.
-                        'name' => $claims['name'] ?? explode('@', $email)[0],
+                        'name' => $name,
                         'password' => Hash::make(Str::random(40)), // unusable random password; this account only ever logs in via Clerk
                     ]
                 );
@@ -206,5 +210,45 @@ class AuthController extends Controller
         }
 
         return $decoded;
+    }
+
+    /**
+     * Look up a Clerk user by ID via the Backend API and return their
+     * primary email + display name. Clerk's session token only carries the
+     * user ID ("sub") by default — not email or name — so those have to be
+     * fetched separately rather than read off the token claims.
+     */
+    protected function fetchClerkUser(string $clerkUserId): array
+    {
+        if (! $clerkUserId) {
+            throw new \RuntimeException('Clerk token did not include a subject (user id) claim.');
+        }
+
+        if (! config('clerk.secret_key')) {
+            throw new \RuntimeException('Clerk auth is not configured yet (missing CLERK_SECRET_KEY).');
+        }
+
+        $response = Http::withToken(config('clerk.secret_key'))
+            ->get("https://api.clerk.com/v1/users/{$clerkUserId}");
+
+        if (! $response->successful()) {
+            throw new \RuntimeException('Failed to fetch Clerk user: ' . $response->body());
+        }
+
+        $data = $response->json();
+
+        $primaryEmailId = $data['primary_email_address_id'] ?? null;
+        $emailAddresses = $data['email_addresses'] ?? [];
+
+        $primaryEmail = collect($emailAddresses)
+            ->firstWhere('id', $primaryEmailId)['email_address']
+            ?? ($emailAddresses[0]['email_address'] ?? null);
+
+        $name = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')) ?: null;
+
+        return [
+            'email' => $primaryEmail,
+            'name' => $name,
+        ];
     }
 }
