@@ -78,7 +78,7 @@ return [
             'theme' => 'light',
             'hideTryIt' => false,
             'hideSchemas' => false,
-            'logo' => '',
+            'logo' => '/logo.svg',
             'tryItCredentialsPolicy' => 'include',
             'layout' => 'responsive',
             'router' => 'hash',
